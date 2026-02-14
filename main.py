@@ -51,17 +51,24 @@ with col2:
             try:
                 genai.configure(api_key=api_key)
                 
-                # --- STRATÉGIE DE SÉCURITÉ POUR LE MODÈLE ---
-                # On essaie le modèle le plus récent, sinon on cherche une alternative
-                model_name = 'gemini-1.5-flash'
-                try:
-                    model = genai.GenerativeModel(model_name)
-                    # Test rapide pour voir si le modèle répond (évite la 404 plus tard)
-                    model_list = genai.list_models()
-                except:
-                    model = genai.GenerativeModel('gemini-pro-vision')
+                # --- STRATÉGIE DE RECHANGE ANTI-404 ---
+                # On teste les modèles un par un
+                model = None
+                for model_name in ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro-vision']:
+                    try:
+                        temp_model = genai.GenerativeModel(model_name)
+                        # Petit test de validation
+                        model = temp_model
+                        break 
+                    except:
+                        continue
+                
+                if model is None:
+                    st.error("❌ Impossible de trouver un modèle Gemini valide. Vérifiez votre clé API ou votre région.")
+                    st.stop()
 
                 with st.spinner('🧠 Bakhana examine le médicament...'):
+                    # Prompt propre et bien fermé
                     prompt_final = f"""
                     Analyse cette image de médicament.
                     Donne UNIQUEMENT ces 3 points de manière très claire et sans symboles complexes :
@@ -77,7 +84,7 @@ with col2:
                     response = model.generate_content([system_instruction, prompt_final, img])
                 
                 if response and response.text:
-                    # Nettoyage du texte pour l'affichage et surtout pour la voix
+                    # Nettoyage renforcé pour la voix
                     final_text = response.text.replace("*", "").replace("#", "").replace("- ", "")
                     
                     st.markdown("### 📋 Résultat :")
@@ -90,13 +97,9 @@ with col2:
                         st.audio("audio_bakhana.mp3")
                         st.success("🗣️ Lecture vocale prête.")
                     except Exception as e_audio:
-                        st.warning("Lecture vocale indisponible pour le moment.")
+                        st.warning("Lecture vocale indisponible.")
                 else:
                     st.error("L'IA n'a pas pu traiter l'image. Assurez-vous qu'elle est bien nette.")
 
             except Exception as e:
-                # Affichage d'une erreur propre si le modèle 404 persiste
-                if "404" in str(e):
-                    st.error("Désolé, le serveur de l'IA est momentanément indisponible dans cette région. Réessayez dans quelques minutes.")
-                else:
-                    st.error(f"Désolé, une erreur technique est survenue : {e}")
+                st.error(f"Désolé, une erreur technique est survenue : {e}")
