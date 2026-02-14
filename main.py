@@ -5,7 +5,7 @@ from gtts import gTTS
 import os
 
 # Configuration de la page
-st.set_page_config(page_title="Dwa-Assist", page_icon="💊", layout="wide")
+st.set_page_config(page_title="Bakhana - Dwa-Assist", page_icon="💊", layout="wide")
 
 # CSS pour le look pro
 hide_menu_style = """
@@ -29,9 +29,8 @@ with st.sidebar:
     """
 
 # --- TITRE ---
-st.title("💊 Dwa-Assist")
-st.markdown("### Votre Pharmacien IA (Vision & Voix 🗣️)")
-st.markdown("---")
+st.title("💊 Bakhana : Dwa-Assist")
+st.markdown("### Votre Pharmacien IA Intelligent (Vision & Voix 🗣️)")
 
 # Colonnes
 col1, col2 = st.columns([1, 1]) 
