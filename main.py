@@ -7,21 +7,20 @@ import os
 # 1. Configuration de la page
 st.set_page_config(page_title="Bakhana - Dwa-Assist", page_icon="💊", layout="wide")
 
-# Masquer le menu pour un look plus "App"
+# Masquer les éléments inutiles
 st.markdown("<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 # --- RÉCUPÉRATION DE LA CLÉ API ---
 try:
-    # Utilisation des secrets Streamlit pour la version en ligne
     api_key = st.secrets["GOOGLE_API_KEY"]
 except Exception:
-    st.error("❌ Erreur : Clé 'GOOGLE_API_KEY' introuvable dans les Secrets Streamlit.")
+    st.error("❌ Erreur : Clé 'GOOGLE_API_KEY' manquante dans les Secrets Streamlit.")
     st.stop()
 
 # --- BARRE LATÉRALE ---
 with st.sidebar:
     st.title("⚙️ Paramètres")
-    st.success("✅ Bakhana est actif")
+    st.success("✅ Bakhana est prêt")
     system_instruction = "Tu es Bakhana, un assistant pharmacien virtuel bienveillant qui aide les personnes âgées."
     uploaded_file = st.file_uploader("Prendre une photo du médicament", type=["jpg", "png", "jpeg"])
 
@@ -43,51 +42,55 @@ with col1:
 # --- COLONNE DROITE (Analyse) ---
 with col2:
     st.subheader("Analyse de Bakhana")
-    user_prompt = st.text_area("Avez-vous une question spécifique ?", placeholder="Ex: Est-ce pour la fièvre ?")
+    user_prompt = st.text_area("Question spécifique ?", placeholder="Ex: Est-ce pour la douleur ?")
     
     if st.button("Lancer l'analyse 🚀", type="primary", use_container_width=True):
         if not uploaded_file:
-            st.warning("⚠️ Merci d'ajouter une photo d'abord.")
+            st.warning("⚠️ Veuillez charger une photo.")
         else:
             try:
                 genai.configure(api_key=api_key)
-                # MODIFICATION ICI : Utilisation du nom de modèle universel pour éviter l'erreur 404
-                model = genai.GenerativeModel('gemini-1.5-flash')
                 
+                # --- SOLUTION ANTI-404 ---
+                # On essaie d'utiliser 'gemini-1.5-flash', sinon on prend le premier disponible
+                try:
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                except:
+                    model = genai.GenerativeModel('gemini-pro-vision') 
+
                 with st.spinner('🧠 Bakhana examine le médicament...'):
-                    # SYNTAXE CORRIGÉE : Les guillemets sont bien refermés
                     prompt_final = f"""
                     Analyse cette image de médicament.
-                    Donne-moi UNIQUEMENT ces 3 points de manière très claire :
-                    1. NOM et USAGE (C'est quoi et pour quoi ?)
-                    2. DOSAGE (Comment le prendre ?)
-                    3. PRÉCAUTION (Y a-t-il un danger ?)
+                    Donne UNIQUEMENT ces 3 points de manière très claire :
+                    1. NOM et USAGE
+                    2. DOSAGE
+                    3. PRÉCAUTION
                     
-                    Note du patient : {user_prompt if user_prompt else "Analyse générale."}
-                    Réponds comme un pharmacien très doux.
+                    Note : {user_prompt if user_prompt else "Analyse générale."}
+                    Réponds de façon concise et douce.
                     """ 
                     
-                    # On repasse l'image pour l'analyse
                     img = Image.open(uploaded_file)
                     response = model.generate_content([system_instruction, prompt_final, img])
                 
-                # SÉCURITÉ : On vérifie que response existe avant de l'afficher (Évite le NameError)
                 if response and response.text:
+                    # Nettoyage immédiat du texte pour l'affichage et l'audio
+                    # On retire les symboles Markdown pour éviter que l'audio les lise
+                    final_text = response.text.replace("*", "").replace("#", "")
+                    
                     st.markdown("### 📋 Résultat :")
-                    st.write(response.text)
+                    st.write(final_text)
                     
                     # GÉNÉRATION AUDIO
                     try:
-                        # On retire les étoiles pour un son propre (pas d'"astérisque astérisque")
-                        clean_text = response.text.replace("*", "")
-                        tts = gTTS(text=clean_text, lang='fr')
+                        tts = gTTS(text=final_text, lang='fr')
                         tts.save("audio_bakhana.mp3")
                         st.audio("audio_bakhana.mp3")
+                        st.success("🗣️ Lecture vocale prête.")
                     except Exception as e_audio:
-                        st.warning("Lecture vocale momentanément indisponible.")
+                        st.warning("Lecture vocale indisponible.")
                 else:
-                    st.error("L'IA n'a pas pu lire l'image. Essayez une photo plus nette.")
+                    st.error("L'IA n'a pas pu traiter l'image.")
 
             except Exception as e:
-                # Gestion générique de l'erreur 404 ou autre
                 st.error(f"Désolé, une erreur technique est survenue : {e}")
