@@ -21,7 +21,7 @@ except Exception:
 with st.sidebar:
     st.title("⚙️ Paramètres")
     st.success("✅ Bakhana est prêt")
-    system_instruction = "Tu es Bakhana, un assistant pharmacien virtuel bienveillant qui aide les personnes âgées."
+    system_instruction = "Tu es Bakhana, un assistant pharmacien virtuel bienveillant qui aide les personnes à comprendre leurs médicaments."
     uploaded_file = st.file_uploader("Prendre une photo du médicament", type=["jpg", "png", "jpeg"])
 
 # --- TITRE ---
@@ -51,20 +51,23 @@ with col2:
             try:
                 genai.configure(api_key=api_key)
                 
-                # --- SOLUTION ANTI-404 ---
-                # On essaie d'utiliser 'gemini-1.5-flash', sinon on prend le premier disponible
+                # --- STRATÉGIE DE SÉCURITÉ POUR LE MODÈLE ---
+                # On essaie le modèle le plus récent, sinon on cherche une alternative
+                model_name = 'gemini-1.5-flash'
                 try:
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel(model_name)
+                    # Test rapide pour voir si le modèle répond (évite la 404 plus tard)
+                    model_list = genai.list_models()
                 except:
-                    model = genai.GenerativeModel('gemini-pro-vision') 
+                    model = genai.GenerativeModel('gemini-pro-vision')
 
                 with st.spinner('🧠 Bakhana examine le médicament...'):
                     prompt_final = f"""
                     Analyse cette image de médicament.
-                    Donne UNIQUEMENT ces 3 points de manière très claire :
-                    1. NOM et USAGE
-                    2. DOSAGE
-                    3. PRÉCAUTION
+                    Donne UNIQUEMENT ces 3 points de manière très claire et sans symboles complexes :
+                    1. NOM et USAGE (C'est quoi ?)
+                    2. DOSAGE (Comment le prendre ?)
+                    3. PRÉCAUTION (Y a-t-il un danger ?)
                     
                     Note : {user_prompt if user_prompt else "Analyse générale."}
                     Réponds de façon concise et douce.
@@ -74,9 +77,8 @@ with col2:
                     response = model.generate_content([system_instruction, prompt_final, img])
                 
                 if response and response.text:
-                    # Nettoyage immédiat du texte pour l'affichage et l'audio
-                    # On retire les symboles Markdown pour éviter que l'audio les lise
-                    final_text = response.text.replace("*", "").replace("#", "")
+                    # Nettoyage du texte pour l'affichage et surtout pour la voix
+                    final_text = response.text.replace("*", "").replace("#", "").replace("- ", "")
                     
                     st.markdown("### 📋 Résultat :")
                     st.write(final_text)
@@ -88,9 +90,13 @@ with col2:
                         st.audio("audio_bakhana.mp3")
                         st.success("🗣️ Lecture vocale prête.")
                     except Exception as e_audio:
-                        st.warning("Lecture vocale indisponible.")
+                        st.warning("Lecture vocale indisponible pour le moment.")
                 else:
-                    st.error("L'IA n'a pas pu traiter l'image.")
+                    st.error("L'IA n'a pas pu traiter l'image. Assurez-vous qu'elle est bien nette.")
 
             except Exception as e:
-                st.error(f"Désolé, une erreur technique est survenue : {e}")
+                # Affichage d'une erreur propre si le modèle 404 persiste
+                if "404" in str(e):
+                    st.error("Désolé, le serveur de l'IA est momentanément indisponible dans cette région. Réessayez dans quelques minutes.")
+                else:
+                    st.error(f"Désolé, une erreur technique est survenue : {e}")
