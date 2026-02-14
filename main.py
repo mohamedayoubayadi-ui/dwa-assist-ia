@@ -7,102 +7,80 @@ import os
 # 1. Configuration de la page
 st.set_page_config(page_title="Bakhana - Dwa-Assist", page_icon="💊", layout="wide")
 
-# Look épuré
-hide_menu_style = """
-        <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        </style>
-        """
-st.markdown(hide_menu_style, unsafe_allow_html=True)
+# Cache le menu Streamlit
+st.markdown("<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 # --- RÉCUPÉRATION DE LA CLÉ API ---
 try:
-    # Récupère la clé depuis les Secrets de Streamlit Cloud
     api_key = st.secrets["GOOGLE_API_KEY"]
 except Exception:
-    st.error("❌ Erreur : La clé API n'est pas configurée dans les Secrets de Streamlit.")
+    st.error("❌ Erreur : Configurez GOOGLE_API_KEY dans les Secrets de Streamlit.")
     st.stop()
 
 # --- BARRE LATÉRALE ---
 with st.sidebar:
     st.title("⚙️ Paramètres")
     st.success("✅ Bakhana est prêt")
-    
-    system_instruction = """
-    Tu es Bakhana, l'assistant intelligent du projet Dwa-Assist. 
-    Ton rôle est d'aider les personnes à comprendre leurs médicaments de manière simple et rassurante.
-    """
-    
-    st.info("📸 Conseil : Assurez-vous que le texte sur la boîte est bien éclairé.")
+    system_instruction = "Tu es Bakhana, un assistant pharmacien intelligent et bienveillant."
+    uploaded_file = st.file_uploader("Charger la photo du médicament", type=["jpg", "png", "jpeg"])
 
-# --- TITRE PRINCIPAL ---
+# --- TITRE ---
 st.title("💊 Bakhana : Dwa-Assist")
 st.markdown("### Votre Pharmacien IA Intelligent (Vision & Voix 🗣️)")
 st.markdown("---")
 
 col1, col2 = st.columns([1, 1]) 
 
-uploaded_file = st.sidebar.file_uploader("Charger la photo du médicament", type=["jpg", "png", "jpeg"])
-image_data = None
-
-# --- COLONNE GAUCHE (Image) ---
+# --- COLONNE GAUCHE ---
 with col1:
     if uploaded_file:
-        st.success("📸 Image reçue")
         image_data = Image.open(uploaded_file)
         st.image(image_data, use_column_width=True)
     else:
-        st.info("👈 Veuillez charger une photo pour commencer l'analyse.")
+        st.info("👈 Chargez une photo pour commencer.")
 
-# --- COLONNE DROITE (Analyse) ---
+# --- COLONNE DROITE ---
 with col2:
     st.subheader("Analyse de Bakhana")
-    user_prompt = st.text_area("Question optionnelle :", height=100, placeholder="Ex: Est-ce pour le rhume ?")
+    user_prompt = st.text_area("Question ?", placeholder="Ex: C'est pour le mal de tête ?")
     
-    if st.button("Analyser le médicament 🚀", type="primary", use_container_width=True):
-        if not image_data:
-            st.warning("⚠️ Merci d'ajouter une photo d'abord.")
+    if st.button("Analyser 🚀", type="primary", use_container_width=True):
+        if not uploaded_file:
+            st.warning("⚠️ Ajoutez une photo d'abord.")
         else:
             try:
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                # Utilisation du nom de modèle le plus compatible
+                model = genai.GenerativeModel('gemini-1.5-flash-latest')
                 
-                with st.spinner('🧠 Bakhana analyse votre médicament...'):
-                    # PROMPT CORRIGÉ (bien fermé avec """)
+                with st.spinner('🧠 Analyse en cours...'):
                     prompt_final = f"""
-                    Analyse cette image de médicament.
-                    Donne-moi UNIQUEMENT ces 3 points de manière très claire :
-                    1. NOM et USAGE (À quoi sert ce médicament ?)
-                    2. DOSAGE (Comment faut-il le prendre ?)
-                    3. PRÉCAUTION (Y a-t-il un danger ou une contre-indication ?)
-                    
-                    Question du patient : {user_prompt if user_prompt else "Analyse générale."}
-                    Réponds de façon concise et bienveillante.
+                    Analyse cette image. Donne :
+                    1. NOM et USAGE
+                    2. DOSAGE
+                    3. PRÉCAUTION
+                    Question patient : {user_prompt if user_prompt else "Analyse générale."}
+                    Réponds de façon courte.
                     """ 
                     
-                    # Génération du contenu
-                    response = model.generate_content([system_instruction, prompt_final, image_data])
+                    # On repasse l'image ouverte
+                    img = Image.open(uploaded_file)
+                    response = model.generate_content([system_instruction, prompt_final, img])
                 
-                # Vérification et affichage du texte
                 if response and response.text:
                     st.markdown("### 📋 Résultat :")
                     st.write(response.text)
                     
-                    # GÉNÉRATION DE LA VOIX
+                    # AUDIO
                     try:
-                        # On nettoie le texte pour la synthèse vocale
-                        texte_propre = response.text.replace("*", "")
-                        
-                        tts = gTTS(text=texte_propre, lang='fr')
-                        tts.save("output_bakhana.mp3")
-                        
-                        st.audio("output_bakhana.mp3")
-                        st.success("🗣️ Analyse vocale disponible.")
+                        clean_text = response.text.replace("*", "")
+                        tts = gTTS(text=clean_text, lang='fr')
+                        tts.save("bakhana_audio.mp3")
+                        st.audio("bakhana_audio.mp3")
                     except Exception as e_audio:
-                        st.error(f"Erreur lors de la création du son : {e_audio}")
+                        st.warning("Son indisponible.")
                 else:
-                    st.error("L'IA n'a pas pu générer de réponse. Réessayez avec une image plus claire.")
+                    st.error("Pas de réponse de l'IA.")
 
             except Exception as e:
                 st.error(f"Erreur technique : {e}")
