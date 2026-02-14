@@ -7,99 +7,109 @@ import os
 # 1. Configuration de la page
 st.set_page_config(page_title="Bakhana - Dwa-Assist", page_icon="💊", layout="wide")
 
-# Masquer les éléments inutiles
-st.markdown("<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;}</style>", unsafe_allow_html=True)
+# Style pour une interface pro
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stButton>button { background-color: #FF4B4B; color: white; border-radius: 10px; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- RÉCUPÉRATION DE LA CLÉ API ---
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except Exception:
-    st.error("❌ Erreur : Clé 'GOOGLE_API_KEY' manquante dans les Secrets Streamlit.")
+    st.error("❌ Configuration incomplète : Clé API manquante dans les Secrets.")
     st.stop()
 
 # --- BARRE LATÉRALE ---
 with st.sidebar:
+    st.image("https://em-content.zkg.io/thumbs/240/apple/354/pill_1f48a.png", width=100)
     st.title("⚙️ Paramètres")
-    st.success("✅ Bakhana est prêt")
-    system_instruction = "Tu es Bakhana, un assistant pharmacien virtuel bienveillant qui aide les personnes à comprendre leurs médicaments."
+    st.success("✅ Assistant Bakhana prêt")
+    
     uploaded_file = st.file_uploader("Prendre une photo du médicament", type=["jpg", "png", "jpeg"])
+    
+    st.divider()
+    st.info("💡 **Conseil :** Assurez-vous que le nom du médicament est bien visible.")
 
-# --- TITRE ---
+# --- TITRE PRINCIPAL ---
 st.title("💊 Bakhana : Dwa-Assist")
 st.markdown("### Votre Pharmacien IA Intelligent (Vision & Voix 🗣️)")
 st.markdown("---")
 
-col1, col2 = st.columns([1, 1]) 
+col1, col2 = st.columns([1, 1.2]) 
 
 # --- COLONNE GAUCHE (Image) ---
 with col1:
     if uploaded_file:
         image_data = Image.open(uploaded_file)
-        st.image(image_data, use_column_width=True)
+        st.image(image_data, caption="Médicament chargé", use_column_width=True)
     else:
-        st.info("👈 Chargez une photo pour commencer l'analyse.")
+        st.info("👈 Veuillez charger une photo pour lancer l'analyse.")
 
 # --- COLONNE DROITE (Analyse) ---
 with col2:
     st.subheader("Analyse de Bakhana")
-    user_prompt = st.text_area("Question spécifique ?", placeholder="Ex: Est-ce pour la douleur ?")
+    user_prompt = st.text_area("Question spécifique ? (Optionnel)", placeholder="Ex: Est-ce pour dormir ?")
     
-    if st.button("Lancer l'analyse 🚀", type="primary", use_container_width=True):
+    if st.button("Lancer l'analyse 🚀", use_container_width=True):
         if not uploaded_file:
-            st.warning("⚠️ Veuillez charger une photo.")
+            st.warning("⚠️ Merci d'ajouter une photo d'abord.")
         else:
             try:
                 genai.configure(api_key=api_key)
                 
-                # --- STRATÉGIE DE RECHANGE ANTI-404 ---
-                # On teste les modèles un par un
+                # --- STRATÉGIE ANTI-404 ---
+                # On teste les modèles du plus récent au plus compatible
                 model = None
-                for model_name in ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro-vision']:
+                available_models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro-vision']
+                
+                for m_name in available_models:
                     try:
-                        temp_model = genai.GenerativeModel(model_name)
-                        # Petit test de validation
-                        model = temp_model
+                        model = genai.GenerativeModel(m_name)
+                        # Test de génération minimal pour valider le modèle
                         break 
                     except:
                         continue
                 
-                if model is None:
-                    st.error("❌ Impossible de trouver un modèle Gemini valide. Vérifiez votre clé API ou votre région.")
+                if not model:
+                    st.error("❌ Erreur de connexion au serveur IA (404).")
                     st.stop()
 
-                with st.spinner('🧠 Bakhana examine le médicament...'):
-                    # Prompt propre et bien fermé
+                with st.spinner('🧠 Bakhana examine le document...'):
+                    system_instruction = "Tu es Bakhana, un assistant pharmacien bienveillant. Réponds de façon simple."
                     prompt_final = f"""
                     Analyse cette image de médicament.
-                    Donne UNIQUEMENT ces 3 points de manière très claire et sans symboles complexes :
+                    Donne UNIQUEMENT ces 3 points :
                     1. NOM et USAGE (C'est quoi ?)
                     2. DOSAGE (Comment le prendre ?)
                     3. PRÉCAUTION (Y a-t-il un danger ?)
                     
-                    Note : {user_prompt if user_prompt else "Analyse générale."}
-                    Réponds de façon concise et douce.
+                    Question du patient : {user_prompt if user_prompt else "Analyse générale."}
+                    Réponds sans utiliser de symboles spéciaux comme les astérisques.
                     """ 
                     
-                    img = Image.open(uploaded_file)
-                    response = model.generate_content([system_instruction, prompt_final, img])
+                    response = model.generate_content([system_instruction, prompt_final, image_data])
                 
                 if response and response.text:
-                    # Nettoyage renforcé pour la voix
-                    final_text = response.text.replace("*", "").replace("#", "").replace("- ", "")
+                    # Nettoyage final du texte
+                    final_text = response.text.replace("*", "").replace("#", "")
                     
                     st.markdown("### 📋 Résultat :")
                     st.write(final_text)
                     
-                    # GÉNÉRATION AUDIO
+                    # --- GÉNÉRATION AUDIO ---
                     try:
                         tts = gTTS(text=final_text, lang='fr')
-                        tts.save("audio_bakhana.mp3")
-                        st.audio("audio_bakhana.mp3")
-                        st.success("🗣️ Lecture vocale prête.")
-                    except Exception as e_audio:
-                        st.warning("Lecture vocale indisponible.")
+                        tts.save("bakhana_speech.mp3")
+                        st.audio("bakhana_speech.mp3")
+                        st.success("🗣️ Analyse vocale disponible.")
+                    except Exception:
+                        st.warning("⚠️ Lecture vocale indisponible.")
                 else:
-                    st.error("L'IA n'a pas pu traiter l'image. Assurez-vous qu'elle est bien nette.")
+                    st.error("L'IA n'a pas pu générer de texte.")
 
             except Exception as e:
                 st.error(f"Désolé, une erreur technique est survenue : {e}")
